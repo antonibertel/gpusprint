@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-training-job
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ml-training
+  template:
+    metadata:
+      labels:
+        app: ml-training
+        team: data-science
+        owner: alice
+    spec:
+      containers:
+      - name: worker
+        image: alpine:3.21
+        command: ["sleep", "infinity"]
+        # We simulate requesting a GPU so the kubelet podresources registers it
+        resources:
+          limits:
+            nvidia.com/gpu: "1"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: video-encoder
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: video-encoder
+  template:
+    metadata:
+      labels:
+        app: video-encoder
+        team: media
+        owner: bob
+    spec:
+      containers:
+      - name: encoder
+        image: alpine:3.21
+        command: ["sleep", "infinity"]
+        resources:
+          limits:
+            nvidia.com/gpu: "1"

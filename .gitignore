@@ -1,0 +1,12 @@
+# Build artifacts
+gpusprint
+
+# Internal design docs (not for public consumption)
+IDEA.md
+IMPLEMENTATION.md
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp

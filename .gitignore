@@ -1,5 +1,5 @@
 # Build artifacts
-gpusprint
+/gpusprint
 
 # Internal design docs (not for public consumption)
 IDEA.md

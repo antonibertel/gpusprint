@@ -106,7 +106,8 @@ All configuration via environment variables (12-factor):
 | `OTLP_PROTOCOL` | `grpc` | `grpc` or `http/protobuf` |
 | `PUBSUB_ENABLED` | `false` | Push to Google Cloud Pub/Sub |
 | `PUBSUB_PROJECT` | - | GCP project ID |
-| `PUBSUB_TOPIC` | - | Pub/Sub topic name |
+| `PUBSUB_HARDWARE_TOPIC` | - | Pub/Sub topic for hardware telemetry |
+| `PUBSUB_ALLOCATION_TOPIC` | - | Pub/Sub topic for allocation metadata |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
 | `LOG_FORMAT` | `json` | `json` or `text` |
 | `DEVELOPMENT_MODE` | `false` | Use simulated GPU/kubelet data (for testing) |

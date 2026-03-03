@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"log/slog"
 
@@ -13,24 +14,27 @@ import (
 )
 
 type PubSubExporter struct {
-	cfg       *config.Config
-	projectID string
-	topicID   string
-	client    *pubsub.Client
-	topic     *pubsub.Topic
+	cfg          *config.Config
+	projectID    string
+	hwTopicID    string
+	allocTopicID string
+	client       *pubsub.Client
+	hwTopic      *pubsub.Topic
+	allocTopic   *pubsub.Topic
 }
 
 func NewPubSubExporter(cfg *config.Config) *PubSubExporter {
 	return &PubSubExporter{
-		cfg:       cfg,
-		projectID: cfg.PubSubProject,
-		topicID:   cfg.PubSubTopic,
+		cfg:          cfg,
+		projectID:    cfg.PubSubProject,
+		hwTopicID:    cfg.PubSubHardwareTopic,
+		allocTopicID: cfg.PubSubAllocationTopic,
 	}
 }
 
 func (ps *PubSubExporter) Start(ctx context.Context) error {
-	if ps.projectID == "" || ps.topicID == "" {
-		return fmt.Errorf("pubsub project and topic must be provided")
+	if ps.projectID == "" || ps.hwTopicID == "" || ps.allocTopicID == "" {
+		return fmt.Errorf("pubsub project and both topics must be provided")
 	}
 
 	client, err := pubsub.NewClient(ctx, ps.projectID)
@@ -39,49 +43,108 @@ func (ps *PubSubExporter) Start(ctx context.Context) error {
 	}
 
 	ps.client = client
-	ps.topic = client.Topic(ps.topicID)
+	ps.hwTopic = client.Topic(ps.hwTopicID)
+	ps.allocTopic = client.Topic(ps.allocTopicID)
 
-	ps.topic.PublishSettings = pubsub.PublishSettings{
+	publishSettings := pubsub.PublishSettings{
 		DelayThreshold:    ps.cfg.PubSubPublishDelay,
 		CountThreshold:    ps.cfg.PubSubCountThreshold,
 		ByteThreshold:     ps.cfg.PubSubByteThreshold,
 		BufferedByteLimit: ps.cfg.PubSubBufferedByteLimit,
 	}
+	ps.hwTopic.PublishSettings = publishSettings
+	ps.allocTopic.PublishSettings = publishSettings
 
 	return nil
 }
 
+type pubsubHardwareMessage struct {
+	Timestamp          time.Time `json:"timestamp"`
+	Cluster            string    `json:"cluster"`
+	Node               string    `json:"node"`
+	UUID               string    `json:"uuid"`
+	Vendor             string    `json:"vendor"`
+	Model              string    `json:"model"`
+	UtilizationPercent float64   `json:"utilization_percent"`
+	MemoryUsedBytes    uint64    `json:"memory_used_bytes"`
+	MemoryTotalBytes   uint64    `json:"memory_total_bytes"`
+}
+
+type pubsubAllocationMessage struct {
+	Timestamp     time.Time `json:"timestamp"`
+	UUID          string    `json:"uuid"`
+	PodNamespace  string    `json:"pod_namespace"`
+	PodName       string    `json:"pod_name"`
+	ContainerName string    `json:"container_name"`
+	WorkloadKind  string    `json:"workload_kind"`
+	WorkloadName  string    `json:"workload_name"`
+	Team          string    `json:"team"`
+	Owner         string    `json:"owner"`
+}
+
 func (ps *PubSubExporter) Export(ctx context.Context, snapshot enrichment.Snapshot) error {
-	if ps.topic == nil {
+	if ps.hwTopic == nil || ps.allocTopic == nil {
 		return fmt.Errorf("pubsub exporter not started")
 	}
 
-	data, err := json.Marshal(snapshot)
-	if err != nil {
-		return fmt.Errorf("failed to marshal snapshot: %w", err)
+	now := time.Now()
+
+	for _, hw := range snapshot.Hardware {
+		msg := pubsubHardwareMessage{
+			Timestamp:          now,
+			Cluster:            snapshot.Cluster,
+			Node:               snapshot.Node,
+			UUID:               hw.UUID,
+			Vendor:             hw.Vendor,
+			Model:              hw.Model,
+			UtilizationPercent: hw.UtilizationPercent,
+			MemoryUsedBytes:    hw.MemoryUsedBytes,
+			MemoryTotalBytes:   hw.MemoryTotalBytes,
+		}
+		data, err := json.Marshal(msg)
+		if err == nil {
+			res := ps.hwTopic.Publish(ctx, &pubsub.Message{Data: data})
+			go func(r *pubsub.PublishResult) {
+				if _, err := r.Get(context.Background()); err != nil {
+					slog.Error("Failed to publish hardware to pubsub", "err", err)
+				}
+			}(res)
+		}
 	}
 
-	res := ps.topic.Publish(ctx, &pubsub.Message{
-		Data: data,
-	})
-
-	// We do not wait for res.Get(ctx) here to avoid blocking the sampler loop.
-	// PubSub will batch according to the PublishSettings above in the background.
-	go func() {
-		// Use a detached context so publishing finishes even if sampler ctx cancels
-		_, err := res.Get(context.Background())
-		if err != nil {
-			slog.Error("Failed to publish to pubsub background worker", "err", err)
+	for _, alloc := range snapshot.Allocations {
+		msg := pubsubAllocationMessage{
+			Timestamp:     now,
+			UUID:          alloc.UUID,
+			PodNamespace:  alloc.PodNamespace,
+			PodName:       alloc.PodName,
+			ContainerName: alloc.ContainerName,
+			WorkloadKind:  alloc.WorkloadKind,
+			WorkloadName:  alloc.WorkloadName,
+			Team:          alloc.Team,
+			Owner:         alloc.Owner,
 		}
-	}()
+		data, err := json.Marshal(msg)
+		if err == nil {
+			res := ps.allocTopic.Publish(ctx, &pubsub.Message{Data: data})
+			go func(r *pubsub.PublishResult) {
+				if _, err := r.Get(context.Background()); err != nil {
+					slog.Error("Failed to publish allocation to pubsub", "err", err)
+				}
+			}(res)
+		}
+	}
 
 	return nil
 }
 
 func (ps *PubSubExporter) Close() error {
 	var err error
-	if ps.topic != nil {
-		ps.topic.Stop()
+	if ps.hwTopic != nil {
+		ps.hwTopic.Stop()
+	}
+	if ps.allocTopic != nil {
+		ps.allocTopic.Stop()
 	}
 	if ps.client != nil {
 		err = ps.client.Close()

@@ -25,7 +25,8 @@ type Config struct {
 	// Pub/Sub push
 	PubSubEnabled           bool          `envconfig:"PUBSUB_ENABLED" default:"false"`
 	PubSubProject           string        `envconfig:"PUBSUB_PROJECT"`
-	PubSubTopic             string        `envconfig:"PUBSUB_TOPIC"`
+	PubSubHardwareTopic     string        `envconfig:"PUBSUB_HARDWARE_TOPIC"`
+	PubSubAllocationTopic   string        `envconfig:"PUBSUB_ALLOCATION_TOPIC"`
 	PubSubPublishDelay      time.Duration `envconfig:"PUBSUB_PUBLISH_DELAY" default:"1s"`
 	PubSubCountThreshold    int           `envconfig:"PUBSUB_COUNT_THRESHOLD" default:"100"`
 	PubSubByteThreshold     int           `envconfig:"PUBSUB_BYTE_THRESHOLD" default:"1000000"`       // 1MB

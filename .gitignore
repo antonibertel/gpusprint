@@ -10,3 +10,10 @@ IMPLEMENTATION.md
 .idea/
 .vscode/
 *.swp
+# Pulumi
+saas/infra/node_modules/
+saas/infra/bin/
+saas/infra/.pulumi/
+
+*.sql
+saas/

@@ -61,12 +61,29 @@ spec:
         - name: DEVELOPMENT_MODE
           value: "true"
         - name: LOG_LEVEL
-          value: "debug"
+          value: "info"
         - name: SAMPLE_INTERVAL
-          value: "5s"
+          value: "15s"
+        - name: PUBSUB_ENABLED
+          value: "false"
+        - name: PUBSUB_PROJECT
+          value: "gpusprint-dev"
+        - name: PUBSUB_HARDWARE_TOPIC
+          value: "gpu-hardware-topic"
+        - name: PUBSUB_ALLOCATION_TOPIC
+          value: "gpu-allocation-topic"
+        - name: OTLP_ENABLED
+          value: "true"
+        - name: OTLP_ENDPOINT
+          value: "otel-collector.gpusprint-system.svc.cluster.local:4317"
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: "/var/run/secrets/gcp/key.json"
         volumeMounts:
         - name: kubelet-sockets
           mountPath: /var/lib/kubelet/pod-resources
+          readOnly: true
+        - name: gcp-key
+          mountPath: /var/run/secrets/gcp
           readOnly: true
         resources:
           requests:
@@ -80,3 +97,6 @@ spec:
         hostPath:
           path: /var/lib/kubelet/pod-resources
           type: DirectoryOrCreate
+      - name: gcp-key
+        secret:
+          secretName: gpusprint-exporter-key

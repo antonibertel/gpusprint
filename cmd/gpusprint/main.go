@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -72,38 +74,40 @@ func main() {
 	}
 
 	var klProvider kubelet.Provider
-	if cfg.DevelopmentMode {
-		slog.Info("Running in DevelopmentMode: injecting simulated Kubelet pod mapping")
-		klProvider = kubelet.NewSimulatedProvider()
+	kl := kubelet.NewClient(cfg.KubeletSocket)
+	if err := kl.Connect(ctx); err != nil {
+		slog.Warn("Could not connect to kubelet socket, will proceed without pod mapping", "err", err)
 	} else {
-		kl := kubelet.NewClient(cfg.KubeletSocket)
-		if err := kl.Connect(ctx); err != nil {
-			slog.Warn("Could not connect to kubelet socket, will proceed without pod mapping", "err", err)
-		} else {
-			defer kl.Close()
-			klProvider = kl
-		}
+		defer kl.Close()
+		klProvider = kl
 	}
 
 	var inf kube.PodProvider
-	if cfg.DevelopmentMode {
-		slog.Info("Running in DevelopmentMode: injecting simulated K8s informer")
-		inf = kube.NewSimulatedPodProvider()
-	} else {
-		manager := kube.NewInformerManager(cfg.NodeName)
-		if err := manager.Start(ctx); err != nil {
-			slog.Warn("Could not start k8s informer, will proceed without metadata enrichment", "err", err)
-		}
-		inf = manager
+	manager := kube.NewInformerManager(cfg.NodeName)
+	if err := manager.Start(ctx); err != nil {
+		slog.Warn("Could not start k8s informer, will proceed without metadata enrichment", "err", err)
 	}
+	inf = manager
+
+	// ── HTTP server (health checks + optional /metrics) ─────────────────
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
+	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
 
 	var exporters []export.Exporter
 
 	if cfg.PrometheusEnabled {
-		promExp := export.NewPrometheusExporter(cfg)
+		promExp := export.NewPrometheusExporter()
 		if err := promExp.Start(ctx); err != nil {
 			slog.Error("Failed to start Prometheus exporter", "err", err)
 		} else {
+			mux.Handle("/metrics", promExp.Handler())
 			exporters = append(exporters, promExp)
 			defer promExp.Close()
 		}
@@ -128,6 +132,15 @@ func main() {
 			defer otlpExp.Close()
 		}
 	}
+
+	httpSrv := &http.Server{Addr: cfg.HTTPAddr, Handler: mux}
+	go func() {
+		slog.Info("Starting HTTP server", "addr", cfg.HTTPAddr)
+		if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("HTTP server failed", "err", err)
+		}
+	}()
+	defer httpSrv.Close()
 
 	smp := sampler.New(cfg, provider, klProvider, inf, exporters...)
 	if err := smp.Run(ctx); err != nil {

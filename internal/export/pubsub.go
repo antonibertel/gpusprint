@@ -51,6 +51,11 @@ func (ps *PubSubExporter) Start(ctx context.Context) error {
 		CountThreshold:    ps.cfg.PubSubCountThreshold,
 		ByteThreshold:     ps.cfg.PubSubByteThreshold,
 		BufferedByteLimit: ps.cfg.PubSubBufferedByteLimit,
+		FlowControlSettings: pubsub.FlowControlSettings{
+			MaxOutstandingMessages: ps.cfg.PubSubCountThreshold,
+			MaxOutstandingBytes:    ps.cfg.PubSubBufferedByteLimit,
+			LimitExceededBehavior:  pubsub.FlowControlSignalError,
+		},
 	}
 	ps.hwTopic.PublishSettings = publishSettings
 	ps.allocTopic.PublishSettings = publishSettings
@@ -102,14 +107,16 @@ func (ps *PubSubExporter) Export(ctx context.Context, snapshot enrichment.Snapsh
 			MemoryTotalBytes:   hw.MemoryTotalBytes,
 		}
 		data, err := json.Marshal(msg)
-		if err == nil {
-			res := ps.hwTopic.Publish(ctx, &pubsub.Message{Data: data})
-			go func(r *pubsub.PublishResult) {
-				if _, err := r.Get(context.Background()); err != nil {
-					slog.Error("Failed to publish hardware to pubsub", "err", err)
-				}
-			}(res)
+		if err != nil {
+			slog.Error("Failed to marshal hardware message", "uuid", hw.UUID, "err", err)
+			continue
 		}
+		res := ps.hwTopic.Publish(ctx, &pubsub.Message{Data: data})
+		go func(r *pubsub.PublishResult) {
+			if _, err := r.Get(ctx); err != nil {
+				slog.Error("Failed to publish hardware to pubsub", "err", err)
+			}
+		}(res)
 	}
 
 	for _, alloc := range snapshot.Allocations {
@@ -125,29 +132,33 @@ func (ps *PubSubExporter) Export(ctx context.Context, snapshot enrichment.Snapsh
 			Owner:         alloc.Owner,
 		}
 		data, err := json.Marshal(msg)
-		if err == nil {
-			res := ps.allocTopic.Publish(ctx, &pubsub.Message{Data: data})
-			go func(r *pubsub.PublishResult) {
-				if _, err := r.Get(context.Background()); err != nil {
-					slog.Error("Failed to publish allocation to pubsub", "err", err)
-				}
-			}(res)
+		if err != nil {
+			slog.Error("Failed to marshal allocation message", "uuid", alloc.UUID, "err", err)
+			continue
 		}
+		res := ps.allocTopic.Publish(ctx, &pubsub.Message{Data: data})
+		go func(r *pubsub.PublishResult) {
+			if _, err := r.Get(ctx); err != nil {
+				slog.Error("Failed to publish allocation to pubsub", "err", err)
+			}
+		}(res)
 	}
 
 	return nil
 }
 
 func (ps *PubSubExporter) Close() error {
-	var err error
+	// Flush pending messages before stopping topics
 	if ps.hwTopic != nil {
+		ps.hwTopic.Flush()
 		ps.hwTopic.Stop()
 	}
 	if ps.allocTopic != nil {
+		ps.allocTopic.Flush()
 		ps.allocTopic.Stop()
 	}
 	if ps.client != nil {
-		err = ps.client.Close()
+		return ps.client.Close()
 	}
-	return err
+	return nil
 }

@@ -19,8 +19,7 @@ type Config struct {
 	DiscoveryRetryInterval time.Duration `envconfig:"DISCOVERY_RETRY_INTERVAL" default:"30s"`
 
 	// Prometheus pull endpoint
-	PrometheusEnabled bool   `envconfig:"PROMETHEUS_ENABLED" default:"true"`
-	PrometheusAddr    string `envconfig:"PROMETHEUS_ADDR" default:":9400"`
+	PrometheusEnabled bool `envconfig:"PROMETHEUS_ENABLED" default:"true"`
 
 	// Pub/Sub push
 	PubSubEnabled           bool          `envconfig:"PUBSUB_ENABLED" default:"false"`
@@ -33,9 +32,14 @@ type Config struct {
 	PubSubBufferedByteLimit int           `envconfig:"PUBSUB_BUFFERED_BYTE_LIMIT" default:"10000000"` // 10MB
 
 	// OTLP push
-	OTLPEnabled  bool   `envconfig:"OTLP_ENABLED" default:"false"`
-	OTLPEndpoint string `envconfig:"OTLP_ENDPOINT"`
-	OTLPProtocol string `envconfig:"OTLP_PROTOCOL" default:"grpc"` // grpc or http/protobuf
+	OTLPEnabled        bool          `envconfig:"OTLP_ENABLED" default:"false"`
+	OTLPEndpoint       string        `envconfig:"OTLP_ENDPOINT"`
+	OTLPProtocol       string        `envconfig:"OTLP_PROTOCOL" default:"grpc"`          // grpc or http/protobuf
+	OTLPExportInterval time.Duration `envconfig:"OTLP_EXPORT_INTERVAL" default:"15s"`     // how often to push to collector
+	OTLPExportTimeout  time.Duration `envconfig:"OTLP_EXPORT_TIMEOUT" default:"10s"`      // per-export timeout; drop on exceed
+
+	// HTTP server (health + metrics)
+	HTTPAddr string `envconfig:"HTTP_ADDR" default:":9400"`
 
 	LogLevel  slog.Level `envconfig:"LOG_LEVEL" default:"info"`
 	LogFormat string     `envconfig:"LOG_FORMAT" default:"json"`

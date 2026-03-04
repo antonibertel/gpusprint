@@ -3,6 +3,7 @@ package export
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/antonibertel/gpusprint/internal/config"
 	"github.com/antonibertel/gpusprint/internal/enrichment"
@@ -24,6 +25,7 @@ type OTLPExporter struct {
 	memTotalGauge    metric.Float64ObservableGauge
 	allocationGauge  metric.Float64ObservableGauge
 
+	mu              sync.Mutex
 	currentSnapshot enrichment.Snapshot
 }
 
@@ -40,13 +42,15 @@ func (oe *OTLPExporter) Start(ctx context.Context) error {
 	if oe.cfg.OTLPProtocol == "http/protobuf" {
 		opts := []otlpmetrichttp.Option{
 			otlpmetrichttp.WithEndpoint(oe.cfg.OTLPEndpoint),
-			otlpmetrichttp.WithInsecure(), // Keep simple for now
+			otlpmetrichttp.WithInsecure(),
+			otlpmetrichttp.WithTimeout(oe.cfg.OTLPExportTimeout),
 		}
 		exporter, err = otlpmetrichttp.New(ctx, opts...)
 	} else {
 		opts := []otlpmetricgrpc.Option{
 			otlpmetricgrpc.WithEndpoint(oe.cfg.OTLPEndpoint),
-			otlpmetricgrpc.WithInsecure(), // Keep simple for now
+			otlpmetricgrpc.WithInsecure(),
+			otlpmetricgrpc.WithTimeout(oe.cfg.OTLPExportTimeout),
 		}
 		exporter, err = otlpmetricgrpc.New(ctx, opts...)
 	}
@@ -55,7 +59,10 @@ func (oe *OTLPExporter) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to create OTLP exporter: %w", err)
 	}
 
-	reader := sdkmetric.NewPeriodicReader(exporter)
+	reader := sdkmetric.NewPeriodicReader(exporter,
+		sdkmetric.WithInterval(oe.cfg.OTLPExportInterval),
+		sdkmetric.WithTimeout(oe.cfg.OTLPExportTimeout),
+	)
 	oe.provider = sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
 	oe.meter = oe.provider.Meter("gpusprint")
 
@@ -100,10 +107,14 @@ func (oe *OTLPExporter) Start(ctx context.Context) error {
 }
 
 func (oe *OTLPExporter) observeMetrics(ctx context.Context, observer metric.Observer) error {
-	for _, hw := range oe.currentSnapshot.Hardware {
+	oe.mu.Lock()
+	snap := oe.currentSnapshot
+	oe.mu.Unlock()
+
+	for _, hw := range snap.Hardware {
 		attrs := metric.WithAttributes(
-			attribute.String("cluster", oe.currentSnapshot.Cluster),
-			attribute.String("node", oe.currentSnapshot.Node),
+			attribute.String("cluster", snap.Cluster),
+			attribute.String("node", snap.Node),
 			attribute.String("uuid", hw.UUID),
 			attribute.String("vendor", hw.Vendor),
 			attribute.String("model", hw.Model),
@@ -114,7 +125,7 @@ func (oe *OTLPExporter) observeMetrics(ctx context.Context, observer metric.Obse
 		observer.ObserveFloat64(oe.memTotalGauge, float64(hw.MemoryTotalBytes), attrs)
 	}
 
-	for _, alloc := range oe.currentSnapshot.Allocations {
+	for _, alloc := range snap.Allocations {
 		attrs := metric.WithAttributes(
 			attribute.String("uuid", alloc.UUID),
 			attribute.String("pod_namespace", alloc.PodNamespace),
@@ -133,7 +144,9 @@ func (oe *OTLPExporter) observeMetrics(ctx context.Context, observer metric.Obse
 }
 
 func (oe *OTLPExporter) Export(ctx context.Context, snapshot enrichment.Snapshot) error {
+	oe.mu.Lock()
 	oe.currentSnapshot = snapshot
+	oe.mu.Unlock()
 	return nil
 }
 

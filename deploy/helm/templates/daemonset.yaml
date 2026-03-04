@@ -38,6 +38,8 @@ spec:
               value: {{ .Values.config.logLevel | quote }}
             - name: SAMPLE_INTERVAL
               value: {{ .Values.config.sampleInterval | quote }}
+            - name: PROMETHEUS_ENABLED
+              value: {{ .Values.config.prometheus.enabled | quote }}
             - name: PUBSUB_ENABLED
               value: {{ .Values.config.pubsub.enabled | quote }}
             {{- if eq .Values.config.pubsub.enabled "true" }}
@@ -49,6 +51,10 @@ spec:
               value: {{ .Values.config.pubsub.allocationTopic | quote }}
             - name: GOOGLE_APPLICATION_CREDENTIALS
               value: "/var/run/secrets/gcp/key.json"
+            {{- end }}
+            {{- if .Values.config.numGPUs }}
+            - name: NUM_GPUS
+              value: {{ .Values.config.numGPUs | quote }}
             {{- end }}
             - name: OTLP_ENABLED
               value: {{ .Values.config.otlp.enabled | quote }}
@@ -65,6 +71,22 @@ spec:
               mountPath: /var/run/secrets/gcp
               readOnly: true
             {{- end }}
+          ports:
+            - name: metrics
+              containerPort: 9400
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: metrics
+            initialDelaySeconds: 5
+            periodSeconds: 10
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       volumes:

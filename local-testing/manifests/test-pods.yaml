@@ -1,0 +1,301 @@
+# Test workloads for local GPU testing.
+# 10 nodes × 12 GPUs = 120 GPUs total. ~60 allocated, ~50% free.
+#
+#   Job          — llm-pretrain: 3 × 4 GPU = 12
+#   Job          — rag-pipeline: 2 × 2 GPU = 4
+#   StatefulSet  — notebooks: 8 × 1 GPU = 8
+#   Deployment   — inference-prod: 10 × 1 GPU = 10
+#   Deployment   — inference-heavy: 3 × 2 GPU = 6
+#   Deployment   — inference-canary: 2 × 1 GPU = 2
+#   CronJob      — video-encoder: 1 × 1 GPU = 1
+#   Job          — nightly-etl: 5 × 1 GPU = 5
+#   StatefulSet  — model-server: 3 × 2 GPU = 6
+#   Deployment   — embedding-api: 6 × 1 GPU = 6
+#   Job          — eval-suite: 3 × 1 GPU = 3
+# Total: 63 GPUs
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: llm-pretrain
+  namespace: default
+  labels:
+    app.kubernetes.io/name: llm-pretrain
+spec:
+  completions: 3
+  parallelism: 3
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: llm-pretrain
+        team: ml-platform
+        owner: alice
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: trainer
+        image: alpine:3.21
+        command: ["sleep", "infinity"]
+        resources:
+          limits:
+            nvidia.com/gpu: "4"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rag-pipeline
+  namespace: default
+  labels:
+    app.kubernetes.io/name: rag-pipeline
+spec:
+  completions: 2
+  parallelism: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: rag-pipeline
+        team: data-eng
+        owner: eve
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: embedder
+        image: alpine:3.21
+        command: ["sleep", "infinity"]
+        resources:
+          limits:
+            nvidia.com/gpu: "2"
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: notebooks
+  namespace: default
+spec:
+  serviceName: notebooks
+  replicas: 8
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: notebooks
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: notebooks
+        team: research
+        owner: alice
+    spec:
+      containers:
+      - name: jupyter
+        image: alpine:3.21
+        command: ["sleep", "infinity"]
+        resources:
+          limits:
+            nvidia.com/gpu: "1"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inference-prod
+  namespace: default
+spec:
+  replicas: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: inference-prod
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: inference-prod
+        team: platform
+        owner: carol
+    spec:
+      containers:
+      - name: server
+        image: alpine:3.21
+        command: ["sleep", "infinity"]
+        resources:
+          limits:
+            nvidia.com/gpu: "1"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inference-heavy
+  namespace: default
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: inference-heavy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: inference-heavy
+        team: platform
+        owner: carol
+    spec:
+      containers:
+      - name: server
+        image: alpine:3.21
+        command: ["sleep", "infinity"]
+        resources:
+          limits:
+            nvidia.com/gpu: "2"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inference-canary
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: inference-canary
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: inference-canary
+        team: platform
+        owner: dave
+    spec:
+      containers:
+      - name: server
+        image: alpine:3.21
+        command: ["sleep", "infinity"]
+        resources:
+          limits:
+            nvidia.com/gpu: "1"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nightly-etl
+  namespace: default
+  labels:
+    app.kubernetes.io/name: nightly-etl
+spec:
+  completions: 5
+  parallelism: 5
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nightly-etl
+        team: data-eng
+        owner: frank
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: etl
+        image: alpine:3.21
+        command: ["sleep", "infinity"]
+        resources:
+          limits:
+            nvidia.com/gpu: "1"
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: model-server
+  namespace: default
+spec:
+  serviceName: model-server
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: model-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: model-server
+        team: ml-platform
+        owner: bob
+    spec:
+      containers:
+      - name: triton
+        image: alpine:3.21
+        command: ["sleep", "infinity"]
+        resources:
+          limits:
+            nvidia.com/gpu: "2"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: embedding-api
+  namespace: default
+spec:
+  replicas: 6
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: embedding-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: embedding-api
+        team: data-science
+        owner: bob
+    spec:
+      containers:
+      - name: embedder
+        image: alpine:3.21
+        command: ["sleep", "infinity"]
+        resources:
+          limits:
+            nvidia.com/gpu: "1"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: eval-suite
+  namespace: default
+  labels:
+    app.kubernetes.io/name: eval-suite
+spec:
+  completions: 3
+  parallelism: 3
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: eval-suite
+        team: ml-platform
+        owner: alice
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: evaluator
+        image: alpine:3.21
+        command: ["sleep", "infinity"]
+        resources:
+          limits:
+            nvidia.com/gpu: "1"
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: video-encoder
+  namespace: default
+  labels:
+    app.kubernetes.io/name: video-encoder
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: video-encoder
+            team: media
+            owner: dave
+        spec:
+          restartPolicy: Never
+          containers:
+          - name: encoder
+            image: alpine:3.21
+            command: ["sleep", "240"]
+            resources:
+              limits:
+                nvidia.com/gpu: "1"

@@ -1,6 +1,8 @@
 package enrichment
 
 import (
+	"strings"
+
 	"github.com/antonibertel/gpusprint/internal/hal"
 	"github.com/antonibertel/gpusprint/internal/kube"
 	"github.com/antonibertel/gpusprint/internal/kubelet"
@@ -43,8 +45,16 @@ func Enrich(hw []hal.AcceleratorMetrics, podMap map[string][]kubelet.PodInfo, k8
 			AcceleratorMetrics: metric,
 		})
 
-		// Allocation layer: one row per (GPU, pod, container) binding
+		// Allocation layer: one row per (GPU, pod, container) binding.
+		// The HAL layer qualifies UUIDs as "baseUUID@node" for global
+		// uniqueness, but the kubelet device-plugin API returns raw UUIDs.
+		// Try the full UUID first, then fall back to the base (before @).
 		podSet, ok := podMap[metric.UUID]
+		if !ok {
+			if idx := strings.IndexByte(metric.UUID, '@'); idx >= 0 {
+				podSet, ok = podMap[metric.UUID[:idx]]
+			}
+		}
 		if !ok || len(podSet) == 0 {
 			continue
 		}

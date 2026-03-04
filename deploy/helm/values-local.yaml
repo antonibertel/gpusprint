@@ -1,0 +1,25 @@
+image:
+  repository: gpusprint
+  tag: "local"
+  pullPolicy: Never
+
+config:
+  developmentMode: "true"
+  logLevel: "info"
+  sampleInterval: "30s"
+  numGPUs: "12"
+
+  prometheus:
+    enabled: "true"
+  pubsub:
+    enabled: "false"
+  otlp:
+    enabled: "false"
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 24Mi
+  limits:
+    cpu: 50m
+    memory: 48Mi

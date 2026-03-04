@@ -16,4 +16,5 @@ saas/infra/bin/
 saas/infra/.pulumi/
 
 *.sql
+*.promql
 saas/

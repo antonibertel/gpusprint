@@ -2,19 +2,16 @@ package export
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"sync"
 
-	"github.com/antonibertel/gpusprint/internal/config"
 	"github.com/antonibertel/gpusprint/internal/enrichment"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type PrometheusExporter struct {
-	addr string
-	srv  *http.Server
+	registry *prometheus.Registry
 
 	utilizationGauge *prometheus.GaugeVec
 	memUsedGauge     *prometheus.GaugeVec
@@ -24,12 +21,11 @@ type PrometheusExporter struct {
 	mu sync.Mutex
 }
 
-func NewPrometheusExporter(cfg *config.Config) *PrometheusExporter {
+func NewPrometheusExporter() *PrometheusExporter {
 	hwLabels := []string{"cluster", "node", "uuid", "vendor", "model"}
 	allocLabels := []string{"uuid", "pod_namespace", "pod_name", "container_name", "workload_kind", "workload_name", "team", "owner"}
 
 	return &PrometheusExporter{
-		addr: cfg.PrometheusAddr,
 		utilizationGauge: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "gpusprint_utilization_percent",
@@ -62,26 +58,18 @@ func NewPrometheusExporter(cfg *config.Config) *PrometheusExporter {
 }
 
 func (pe *PrometheusExporter) Start(ctx context.Context) error {
-	prometheus.MustRegister(pe.utilizationGauge)
-	prometheus.MustRegister(pe.memUsedGauge)
-	prometheus.MustRegister(pe.memTotalGauge)
-	prometheus.MustRegister(pe.allocationInfo)
-
-	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.Handler())
-
-	pe.srv = &http.Server{
-		Addr:    pe.addr,
-		Handler: mux,
-	}
-
-	go func() {
-		if err := pe.srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			// This would ideally be logged via slog, but keeping simple
-		}
-	}()
-
+	pe.registry = prometheus.NewRegistry()
+	pe.registry.MustRegister(pe.utilizationGauge)
+	pe.registry.MustRegister(pe.memUsedGauge)
+	pe.registry.MustRegister(pe.memTotalGauge)
+	pe.registry.MustRegister(pe.allocationInfo)
 	return nil
+}
+
+// Handler returns the HTTP handler for Prometheus metrics scraping.
+// Mount this on the application's shared HTTP server.
+func (pe *PrometheusExporter) Handler() http.Handler {
+	return promhttp.HandlerFor(pe.registry, promhttp.HandlerOpts{})
 }
 
 func (pe *PrometheusExporter) Export(ctx context.Context, snapshot enrichment.Snapshot) error {
@@ -128,8 +116,5 @@ func (pe *PrometheusExporter) Export(ctx context.Context, snapshot enrichment.Sn
 }
 
 func (pe *PrometheusExporter) Close() error {
-	if pe.srv != nil {
-		return pe.srv.Close()
-	}
 	return nil
 }

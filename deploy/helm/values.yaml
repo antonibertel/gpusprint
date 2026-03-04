@@ -1,5 +1,7 @@
 image:
-  repository: docker.io/ntb/gpusprint
+  # Public image from GitHub Container Registry.
+  # For local minikube testing use values-local.yaml instead.
+  repository: ghcr.io/antonibertel/gpusprint
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: "latest"
@@ -24,14 +26,15 @@ rbac:
 daemonset:
   # Host PID allows the daemonset to see process information from the host
   hostPID: true
-  
+
   podAnnotations:
     prometheus.io/scrape: "true"
-    prometheus.io/port: "8080"
-  
+    prometheus.io/port: "9400"
+    prometheus.io/path: "/metrics"
+
   # Allow daemonset to be scheduled on all nodes or specific ones
   nodeSelector: {}
-  
+
   tolerations:
     - key: "nvidia.com/gpu"
       operator: "Exists"
@@ -48,16 +51,19 @@ resources:
     memory: 256Mi
 
 config:
-  developmentMode: "true"
+  developmentMode: "false"
   logLevel: "info"
-  sampleInterval: "15s"
-  
+  sampleInterval: "30s"
+
+  prometheus:
+    enabled: "true"
+
   pubsub:
     enabled: "false"
     project: "gpusprint-dev"
     hardwareTopic: "gpu-hardware-topic"
     allocationTopic: "gpu-allocation-topic"
-  
+
   otlp:
     enabled: "false"
     endpoint: "otel-collector.gpusprint-system.svc.cluster.local:4317"

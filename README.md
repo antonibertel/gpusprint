@@ -72,7 +72,12 @@ Unallocated GPUs have hardware rows but no `gpusprint_allocation_info` row.
 
 ## Deployment
 
-A Helm chart is currently in progress. For now, you can deploy using the raw manifest.
+Install on any Kubernetes cluster with Helm:
+
+```bash
+helm upgrade --install gpusprint oci://ghcr.io/antonibertel/charts/gpusprint \
+  --namespace gpusprint-system --create-namespace
+```
 
 ### Prerequisites
 

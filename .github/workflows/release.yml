@@ -94,8 +94,28 @@ jobs:
         run: |
           echo "### Released ${FULL_IMAGE}" >> "$GITHUB_STEP_SUMMARY"
 
-  release:
+  helm-chart:
     needs: [version, merge]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+      - name: Login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Package and push chart
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          helm package deploy/helm \
+            --version "$TAG" \
+            --app-version "$TAG"
+          helm push gpusprint-${TAG}.tgz oci://ghcr.io/antonibertel/charts
+
+  release:
+    needs: [version, merge, helm-chart]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -114,6 +134,14 @@ jobs:
           name: ${{ needs.version.outputs.tag }}
           generate_release_notes: true
           body: |
+            ## Install
+
+            ```
+            helm upgrade --install gpusprint oci://ghcr.io/antonibertel/charts/gpusprint \
+              --version ${{ needs.version.outputs.tag }} \
+              --namespace gpusprint-system --create-namespace
+            ```
+
             ## Container Image
 
             ```

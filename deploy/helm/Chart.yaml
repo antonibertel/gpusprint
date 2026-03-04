@@ -2,5 +2,7 @@ apiVersion: v2
 name: gpusprint
 description: A Helm chart for deploying the gpusprint GPU metrics exporter
 type: application
-version: 0.1.0
-appVersion: "1.0.0"
+# version and appVersion are set dynamically by CI during release.
+# For local development, these placeholders are used.
+version: 0.0.0-dev
+appVersion: "latest"

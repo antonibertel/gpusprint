@@ -4,7 +4,8 @@ image:
   repository: ghcr.io/antonibertel/gpusprint
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "latest"
+  # Leave empty to use appVersion (set by CI at release time).
+  tag: ""
 
 imagePullSecrets: []
 nameOverride: ""

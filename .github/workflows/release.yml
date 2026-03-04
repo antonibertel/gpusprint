@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - id: v
-        run: echo "tag=$(date -u +'%Y.%m.%d')-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        run: echo "tag=$(date -u +'%Y.%m.%d')-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
   build:
     needs: version
@@ -44,7 +44,8 @@ jobs:
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ matrix.platform }}
           cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
-      - run: |
+      - name: Save digest
+        run: |
           mkdir -p /tmp/digests
           touch "/tmp/digests/${DIGEST#sha256:}"
         env:
@@ -73,10 +74,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/setup-buildx-action@v3
-      - working-directory: /tmp/digests
+      - name: Create manifest
+        env:
+          IMAGE: ${{ env.IMAGE }}
+          TAG: ${{ needs.version.outputs.tag }}
         run: |
+          mapfile -t digests < <(find /tmp/digests -type f -printf "${IMAGE}@sha256:%f\n")
           docker buildx imagetools create \
-            -t ${{ env.IMAGE }}:${{ needs.version.outputs.tag }} \
-            -t ${{ env.IMAGE }}:latest \
-            $(printf '${{ env.IMAGE }}@sha256:%s ' *)
-      - run: echo "### :rocket: ${{ env.IMAGE }}:${{ needs.version.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+            -t "${IMAGE}:${TAG}" \
+            -t "${IMAGE}:latest" \
+            "${digests[@]}"
+      - name: Summary
+        env:
+          FULL_IMAGE: ${{ env.IMAGE }}:${{ needs.version.outputs.tag }}
+        run: |
+          echo "### Released ${FULL_IMAGE}" >> "$GITHUB_STEP_SUMMARY"

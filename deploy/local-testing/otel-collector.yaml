@@ -15,11 +15,13 @@ data:
     exporters:
       debug:
         verbosity: detailed
+      googlecloud:
+        project: gpusprint-dev
     service:
       pipelines:
         metrics:
           receivers: [otlp]
-          exporters: [debug]
+          exporters: [debug, googlecloud]
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -37,15 +39,24 @@ spec:
     spec:
       containers:
       - name: otel-collector
-        image: otel/opentelemetry-collector:0.110.0
-        command: ["/otelcol", "--config=/etc/otelcol/config.yaml"]
+        image: otel/opentelemetry-collector-contrib:0.110.0
+        command: ["/otelcol-contrib", "--config=/etc/otelcol/config.yaml"]
+        env:
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: /var/secrets/google/key.json
         volumeMounts:
         - name: config-volume
           mountPath: /etc/otelcol
+        - name: google-cloud-key
+          mountPath: /var/secrets/google
+          readOnly: true
       volumes:
       - name: config-volume
         configMap:
           name: otel-collector-conf
+      - name: google-cloud-key
+        secret:
+          secretName: google-cloud-key
 ---
 apiVersion: v1
 kind: Service

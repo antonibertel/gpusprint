@@ -1,0 +1,66 @@
+image:
+  repository: docker.io/ntb/gpusprint
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+rbac:
+  # Specifies whether RBAC resources should be created
+  create: true
+
+daemonset:
+  # Host PID allows the daemonset to see process information from the host
+  hostPID: true
+  
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+  
+  # Allow daemonset to be scheduled on all nodes or specific ones
+  nodeSelector: {}
+  
+  tolerations:
+    - key: "nvidia.com/gpu"
+      operator: "Exists"
+      effect: "NoSchedule"
+
+  affinity: {}
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+config:
+  developmentMode: "true"
+  logLevel: "info"
+  sampleInterval: "15s"
+  
+  pubsub:
+    enabled: "false"
+    project: "gpusprint-dev"
+    hardwareTopic: "gpu-hardware-topic"
+    allocationTopic: "gpu-allocation-topic"
+  
+  otlp:
+    enabled: "false"
+    endpoint: "otel-collector.gpusprint-system.svc.cluster.local:4317"
+
+# Requires setting up google service account key as a secret manually, or via value if you want to template it
+gcpSecretName: "gpusprint-exporter-key"

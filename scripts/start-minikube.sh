@@ -9,7 +9,10 @@ if ! command -v minikube &> /dev/null; then
 fi
 
 echo "Starting minikube with podman driver..."
-minikube start --driver=podman
+# IMPORTANT: Podman machine MUST be running in rootful mode, otherwise nested containers (etcd, kube-apiserver, etc.)
+# fail to start with "error setting rlimit type 7: operation not permitted".
+# If minikube hangs on "Booting up control plane...", run: podman machine stop && podman machine set --rootful && podman machine start
+minikube start --driver=podman --docker-opt="default-ulimit=nproc=65535:65535"
 
 echo "Waiting for minikube nodes to be ready..."
 # minikube can download the appropriate version of kubectl if it's not installed globally

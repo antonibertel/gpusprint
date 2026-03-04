@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "gpusprint.fullname" . }}
+  labels:
+    {{- include "gpusprint.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "gpusprint.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "gpusprint.selectorLabels" . | nindent 8 }}
+      {{- with .Values.daemonset.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "gpusprint.serviceAccountName" . }}
+      hostPID: {{ .Values.daemonset.hostPID }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: DEVELOPMENT_MODE
+              value: {{ .Values.config.developmentMode | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.config.logLevel | quote }}
+            - name: SAMPLE_INTERVAL
+              value: {{ .Values.config.sampleInterval | quote }}
+            - name: PUBSUB_ENABLED
+              value: {{ .Values.config.pubsub.enabled | quote }}
+            {{- if eq .Values.config.pubsub.enabled "true" }}
+            - name: PUBSUB_PROJECT
+              value: {{ .Values.config.pubsub.project | quote }}
+            - name: PUBSUB_HARDWARE_TOPIC
+              value: {{ .Values.config.pubsub.hardwareTopic | quote }}
+            - name: PUBSUB_ALLOCATION_TOPIC
+              value: {{ .Values.config.pubsub.allocationTopic | quote }}
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: "/var/run/secrets/gcp/key.json"
+            {{- end }}
+            - name: OTLP_ENABLED
+              value: {{ .Values.config.otlp.enabled | quote }}
+            {{- if eq .Values.config.otlp.enabled "true" }}
+            - name: OTLP_ENDPOINT
+              value: {{ .Values.config.otlp.endpoint | quote }}
+            {{- end }}
+          volumeMounts:
+            - name: kubelet-sockets
+              mountPath: /var/lib/kubelet/pod-resources
+              readOnly: true
+            {{- if eq .Values.config.pubsub.enabled "true" }}
+            - name: gcp-key
+              mountPath: /var/run/secrets/gcp
+              readOnly: true
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: kubelet-sockets
+          hostPath:
+            path: /var/lib/kubelet/pod-resources
+            type: DirectoryOrCreate
+        {{- if eq .Values.config.pubsub.enabled "true" }}
+        - name: gcp-key
+          secret:
+            secretName: {{ .Values.gcpSecretName }}
+        {{- end }}
+      {{- with .Values.daemonset.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.daemonset.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.daemonset.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

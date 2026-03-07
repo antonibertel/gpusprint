@@ -2,14 +2,16 @@
 
 `gpusprint` is a highly lightweight (using <128MB RAM and negligible CPU), single-binary Kubernetes DaemonSet written in Go that tracks GPU utilization, allocation, and efficiency across your clusters. It works with multiple accelerators and provides unified metrics regardless of the underlying hardware.
 
+Metrics are exported in fully open formats (Prometheus/OTLP), so you can build any custom dashboard. Alternatively, you can use the application to create more beautiful, customizable, and dynamic charts. An example is available here: [GPUSprint](https://gpusprint.com/).
+
 | Accelerator | Status |
 |---|---|
 | NVIDIA (NVML) | ✅ Supported |
 | AMD (ROCm) | Planned |
-| Intel | Planned |
+| Google TPUs | Planned |
 | Tenstorrent | Planned |
-| GCP TPUs | Planned |
 | AWS Trainium / Inferentia | Planned |
+| Intel | Planned |
 
 | Exporter | Type | Status |
 |---|---|---|
@@ -44,7 +46,7 @@ flowchart TD
 2. **Kubelet Allocation Mapping** - Reads the local `PodResources` gRPC socket to map GPUs -> pods.
 3. **Metadata Enrichment** - Appends workload context (`Deployment`, `Job`) and custom pod labels (`team`, `owner`) from a cached K8s informer.
 
-## Metrics (Draft)
+## Metrics
 
 *Note: These metrics are currently a draft and might change as the project evolves.*
 
@@ -86,12 +88,6 @@ helm upgrade --install gpusprint oci://ghcr.io/antonibertel/charts/gpusprint \
 - **Pod Labels**: To correctly aggregate metrics and attribute GPU usage, your pods must be tagged with specific labels (by default, it looks for `team` and `owner`). These keys tell `gpusprint` how to slice the data and can be customized via the `TEAM_LABEL_KEY` and `OWNER_LABEL_KEY` environment variables.
 - **Cluster Name**: You should configure the `CLUSTER_NAME` environment variable on the DaemonSet to identify where the metrics are originating from.
 
-### Quick Start
-
-```bash
-kubectl apply -f deploy/daemonset.yaml
-```
-
 ### Configuration
 
 All configuration via environment variables (12-factor):
@@ -121,10 +117,13 @@ All configuration via environment variables (12-factor):
 
 ```bash
 # Start minikube
-./scripts/start-minikube.sh
+./local-testing/start-minikube.sh
 
-# Build image inside minikube and deploy
-./scripts/build-image.sh
+# Deploy with production images
+./local-testing/deploy.sh
+
+# Or build & deploy local images
+USE_LOCAL=1 ./local-testing/deploy.sh
 
 # Check metrics
 kubectl -n gpusprint-system port-forward daemonset/gpusprint 9400:9400

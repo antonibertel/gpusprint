@@ -17,20 +17,23 @@ NODES=$($KUBECTL get nodes --no-headers | wc -l | tr -d ' ')
 
 if [[ "$USE_LOCAL" == "1" ]]; then
   echo "Building local images..."
-  podman build -t fake-gpu-device-plugin:local -f local-testing/fake-device-plugin/Dockerfile .
   podman build -t gpusprint:local -f Dockerfile .
-  podman tag localhost/fake-gpu-device-plugin:local docker.io/library/fake-gpu-device-plugin:local
-  podman tag localhost/gpusprint:local docker.io/library/gpusprint:local
-  echo "Loading images into minikube..."
-  minikube image load docker.io/library/fake-gpu-device-plugin:local
-  minikube image load docker.io/library/gpusprint:local
+  podman build -t fake-gpu-device-plugin:local -f local-testing/fake-device-plugin/Dockerfile .
+  echo "Loading images into minikube (via tar for multi-node)..."
+  podman save gpusprint:local -o /tmp/gpusprint.tar
+  podman save fake-gpu-device-plugin:local -o /tmp/fake-gpu-device-plugin.tar
+  minikube image load /tmp/gpusprint.tar
+  minikube image load /tmp/fake-gpu-device-plugin.tar
+  rm -f /tmp/gpusprint.tar /tmp/fake-gpu-device-plugin.tar
   HELM_VALUES_FILE="deploy/helm/values-local.yaml"
+  GPUSPRINT_TAG="local"
 else
   echo "Using production images from GHCR..."
   # Only the fake device plugin needs a local build
   podman build -t fake-gpu-device-plugin:local -f local-testing/fake-device-plugin/Dockerfile .
-  podman tag localhost/fake-gpu-device-plugin:local docker.io/library/fake-gpu-device-plugin:local
-  minikube image load docker.io/library/fake-gpu-device-plugin:local
+  podman save fake-gpu-device-plugin:local -o /tmp/fake-gpu-device-plugin.tar
+  minikube image load /tmp/fake-gpu-device-plugin.tar
+  rm -f /tmp/fake-gpu-device-plugin.tar
   HELM_VALUES_FILE="deploy/helm/values.yaml"
 fi
 

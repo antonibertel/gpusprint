@@ -5,7 +5,7 @@ set -euo pipefail
 
 NODES="${1:-${NODES:-10}}"
 
-# Ensure podman machine has enough RAM (minikube needs ~1800 MB/node)
+# Ensure podman machine has enough RAM (~1800 MB/node — minikube minimum)
 if command -v podman &> /dev/null; then
     PODMAN_MEM=$(podman machine inspect --format '{{.Resources.Memory}}' 2>/dev/null || echo 0)
     NEEDED_MB=$(( NODES * 1800 + 2048 ))
